@@ -8,9 +8,9 @@ the exception message in a dedicated buffer — no `binding.pry` /
 
 It talks to Emacs directly — over its Unix-domain socket when Emacs is on
 the same machine, or over its TCP server when it isn't (e.g. reaching a
-host Emacs from inside Docker) — so no `emacsclient` binary is required
-either way. It only shells out to `emacsclient` as a fallback for setups
-neither of those covers.
+host Emacs from inside Docker) — implementing Emacs's own server protocol
+in pure Ruby. No `emacsclient` binary is required or used, on either
+path.
 
 ## Requirements
 
@@ -50,9 +50,8 @@ end
 ```
 
 `EmacsDebug.available?` reports whether Emacs can currently be reached (a
-local socket exists, or `emacsclient` is on `PATH`), so it's safe to call
-`debug` / `open_error` unconditionally — they're no-ops when Emacs isn't
-reachable.
+local socket or a TCP server file exists), so it's safe to call `debug` /
+`open_error` unconditionally — they're no-ops when Emacs isn't reachable.
 
 ### Configuration
 
@@ -86,7 +85,7 @@ message in Emacs every time a request raises in development.
 
 If your Rails app runs inside Docker but Emacs runs on your host machine, a
 Unix-domain socket won't reach across the container boundary. Point
-`emacsclient` at a TCP server instead:
+`emacs_debug` at a TCP server instead:
 
 1. On the host, before starting Emacs:
 
@@ -107,7 +106,7 @@ Unix-domain socket won't reach across the container boundary. Point
    (pass `HOST`, `SOURCE`, `DEST` as arguments to override the defaults —
    see the script header for details).
 
-3. Mount that file into the container and point `emacsclient` at it:
+3. Mount that file into the container and point `EMACS_SERVER_FILE` at it:
 
    ```sh
    docker run --rm \
@@ -121,30 +120,21 @@ Unix-domain socket won't reach across the container boundary. Point
    translate container paths (e.g. `/app/models/user.rb`) to the matching
    path on the host filesystem, so Emacs opens a file it can actually find.
 
-No `emacsclient` binary is needed in the container image for this path —
-`emacs_debug` speaks the TCP server protocol directly.
+No `emacsclient` binary is needed in the container image — `emacs_debug`
+speaks the TCP server protocol directly.
 
 ## Verifying the Docker setup
 
-`docker/verify.rb` and the accompanying `Dockerfile` exercise these
-scenarios:
+`docker/verify.rb` and the accompanying `Dockerfile` (which doesn't
+install `emacsclient` at all) exercise both scenarios:
 
 ```sh
-# emacsclient absent, no server reachable either
+# no server reachable
 docker build -t emacs_debug_verify .
 docker run --rm emacs_debug_verify
 
-# emacsclient absent, pointed at a host TCP server (pure-Ruby TcpClient)
+# pointed at a host TCP server
 docker run --rm -e EMACS_SERVER_FILE=/server/docker \
   -v ~/.emacs.d/server/docker:/server/docker:ro \
   emacs_debug_verify
-
-# emacsclient present, no server to reach
-docker build --build-arg WITH_EMACSCLIENT=true -t emacs_debug_verify_with .
-docker run --rm emacs_debug_verify_with
-
-# emacsclient present, pointed at a host TCP server (emacsclient fallback)
-docker run --rm -e EMACS_SERVER_FILE=/server/docker \
-  -v ~/.emacs.d/server/docker:/server/docker:ro \
-  emacs_debug_verify_with
 ```

@@ -28,10 +28,9 @@ module EmacsDebug
 
     # Checked fresh every time (not memoized): a local Emacs server can
     # start after this process has already booted, and the file/socket
-    # checks are cheap. Only the emacsclient-on-PATH fallback is memoized,
-    # since PATH doesn't change at runtime.
+    # checks are cheap.
     def available?
-      SocketClient.available? || TcpClient.available? || emacsclient_on_path?
+      SocketClient.available? || TcpClient.available?
     end
 
     def debug(obj)
@@ -107,18 +106,9 @@ module EmacsDebug
       LISP
     end
 
-    def emacsclient_on_path?
-      return @emacsclient_on_path if defined?(@emacsclient_on_path)
-
-      @emacsclient_on_path = ENV["PATH"].to_s.split(File::PATH_SEPARATOR).any? do |dir|
-        File.executable?(File.join(dir, "emacsclient"))
-      end
-    end
-
-    # Prefers talking to a local Emacs server directly, over its Unix
-    # socket (SocketClient) or, e.g. for a host Emacs reached from Docker,
-    # its TCP server (TcpClient). Falls back to the emacsclient binary,
-    # kept around for setups those two don't cover.
+    # Talks to a local Emacs server directly, over its Unix socket
+    # (SocketClient) or, e.g. for a host Emacs reached from Docker, its TCP
+    # server (TcpClient). No emacsclient binary is used or required.
     def eval_lisp(lisp)
       [SocketClient, TcpClient].each do |client|
         next unless client.available?
@@ -130,8 +120,6 @@ module EmacsDebug
           # Try the next client, e.g. a stale socket/server file.
         end
       end
-
-      system("emacsclient", "--eval", lisp, out: File::NULL, err: File::NULL) if emacsclient_on_path?
     end
   end
 end
