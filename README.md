@@ -6,10 +6,11 @@ a running Emacs, highlights the triggering line, and shows debug output or
 the exception message in a dedicated buffer — no `binding.pry` /
 `byebug` session required.
 
-It talks to Emacs either directly over its Unix-domain socket (no
-`emacsclient` binary needed when Emacs is on the same machine) or, when
-that's not available, by shelling out to `emacsclient` — which is also the
-path used to reach a host Emacs's TCP server from inside Docker.
+It talks to Emacs directly — over its Unix-domain socket when Emacs is on
+the same machine, or over its TCP server when it isn't (e.g. reaching a
+host Emacs from inside Docker) — so no `emacsclient` binary is required
+either way. It only shells out to `emacsclient` as a fallback for setups
+neither of those covers.
 
 ## Requirements
 
@@ -120,25 +121,29 @@ Unix-domain socket won't reach across the container boundary. Point
    translate container paths (e.g. `/app/models/user.rb`) to the matching
    path on the host filesystem, so Emacs opens a file it can actually find.
 
-`emacsclient` must be installed in the container image for this path (the
-Unix-socket fast path is unavailable across the container boundary).
+No `emacsclient` binary is needed in the container image for this path —
+`emacs_debug` speaks the TCP server protocol directly.
 
 ## Verifying the Docker setup
 
-`docker/verify.rb` and the accompanying `Dockerfile` exercise all three
-scenarios — no `emacsclient` binary, `emacsclient` present with no server to
-reach, and `emacsclient` pointed at a host TCP server:
+`docker/verify.rb` and the accompanying `Dockerfile` exercise these
+scenarios:
 
 ```sh
-# emacsclient absent
+# emacsclient absent, no server reachable either
 docker build -t emacs_debug_verify .
 docker run --rm emacs_debug_verify
 
-# emacsclient present, no server
+# emacsclient absent, pointed at a host TCP server (pure-Ruby TcpClient)
+docker run --rm -e EMACS_SERVER_FILE=/server/docker \
+  -v ~/.emacs.d/server/docker:/server/docker:ro \
+  emacs_debug_verify
+
+# emacsclient present, no server to reach
 docker build --build-arg WITH_EMACSCLIENT=true -t emacs_debug_verify_with .
 docker run --rm emacs_debug_verify_with
 
-# emacsclient present, pointed at a host TCP server
+# emacsclient present, pointed at a host TCP server (emacsclient fallback)
 docker run --rm -e EMACS_SERVER_FILE=/server/docker \
   -v ~/.emacs.d/server/docker:/server/docker:ro \
   emacs_debug_verify_with

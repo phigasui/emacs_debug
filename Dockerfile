@@ -4,11 +4,18 @@
 #   docker build -t emacs_debug_verify .
 #   docker run --rm emacs_debug_verify
 #
+# Build without emacsclient, pointed at a host TCP server: TcpClient talks
+# to it directly, no emacsclient binary required.
+#   docker run --rm -e EMACS_SERVER_FILE=/server/docker \
+#     -v ~/.emacs.d/server/docker:/server/docker:ro \
+#     emacs_debug_verify
+#
 # Build with emacsclient present (binary exists but no server to reach):
 #   docker build --build-arg WITH_EMACSCLIENT=true -t emacs_debug_verify_with .
 #   docker run --rm emacs_debug_verify_with
 #
-# Build with emacsclient present and pointed at a host TCP server:
+# Build with emacsclient present and pointed at a host TCP server (exercises
+# the emacsclient fallback path):
 #   docker run --rm -e EMACS_SERVER_FILE=/server/docker \
 #     -v ~/.emacs.d/server/docker:/server/docker:ro \
 #     emacs_debug_verify_with
