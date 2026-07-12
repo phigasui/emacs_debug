@@ -53,6 +53,11 @@ end
 local socket or a TCP server file exists), so it's safe to call `debug` /
 `open_error` unconditionally — they're no-ops when Emacs isn't reachable.
 
+Both `debug` and `open_error` do their Emacs I/O on a background thread, so
+they never block your app while waiting for a reply. If the request can't be
+delivered (no server accepts it, or the interaction raises), a one-line
+warning is written to `$stderr` rather than interrupting your program.
+
 ### Configuration
 
 | Setting | Default | Purpose |
@@ -138,3 +143,15 @@ docker run --rm -e EMACS_SERVER_FILE=/server/docker \
   -v ~/.emacs.d/server/docker:/server/docker:ro \
   emacs_debug_verify
 ```
+
+## Development
+
+```sh
+bundle install
+bundle exec rake        # runs the tests and the Standard style check
+bundle exec rake test   # tests only
+bundle exec standardrb  # lint only (--fix to autocorrect)
+```
+
+The test suite exercises the wire protocol, server-file parsing, path
+resolution, and Lisp escaping without needing a running Emacs.
