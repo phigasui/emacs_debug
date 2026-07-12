@@ -1,4 +1,6 @@
 require_relative "emacs_debug/version"
+require_relative "emacs_debug/socket_client"
+require_relative "emacs_debug/tcp_client"
 
 module EmacsDebug
   HIGHLIGHT_COLOR = "#ffff00"
@@ -24,12 +26,11 @@ module EmacsDebug
       @host_root || ENV["EMACS_DEBUG_HOST_ROOT"]
     end
 
+    # Checked fresh every time (not memoized): a local Emacs server can
+    # start after this process has already booted, and the file/socket
+    # checks are cheap.
     def available?
-      return @available if defined?(@available)
-
-      @available = ENV["PATH"].to_s.split(File::PATH_SEPARATOR).any? do |dir|
-        File.executable?(File.join(dir, "emacsclient"))
-      end
+      SocketClient.available? || TcpClient.available?
     end
 
     def debug(obj)
@@ -105,8 +106,20 @@ module EmacsDebug
       LISP
     end
 
+    # Talks to a local Emacs server directly, over its Unix socket
+    # (SocketClient) or, e.g. for a host Emacs reached from Docker, its TCP
+    # server (TcpClient). No emacsclient binary is used or required.
     def eval_lisp(lisp)
-      system("emacsclient", "--eval", lisp, out: File::NULL, err: File::NULL)
+      [SocketClient, TcpClient].each do |client|
+        next unless client.available?
+
+        begin
+          client.eval(lisp)
+          return
+        rescue EmacsServerProtocol::Error
+          # Try the next client, e.g. a stale socket/server file.
+        end
+      end
     end
   end
 end
