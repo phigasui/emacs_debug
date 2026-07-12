@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Rewrites the host's Emacs TCP server file so a Docker container can reach
+# it via host.docker.internal instead of the loopback interface.
+#
+# emacsclient parses the address in the server file as a raw IPv4 address
+# (no DNS lookup) -- writing a hostname like host.docker.internal there
+# makes it fail with "Network is unreachable". So if HOST is not already an
+# IP address, this script resolves it to one first (from inside a
+# throwaway container, since host.docker.internal only resolves there).
+#
+# Prerequisite on the host, before starting Emacs:
+#   (setq server-use-tcp t)
+#   (setq server-host "0.0.0.0")   ; or a more restrictive bind address
+#   (server-start)
+#
+# Usage: bin/emacs-server-file-for-docker [HOST] [SOURCE] [DEST]
+#   HOST   address (or hostname) the container uses to reach this machine (default: host.docker.internal)
+#   SOURCE the real server file Emacs wrote (default: ~/.emacs.d/server/server)
+#   DEST   where to write the container-facing copy (default: ~/.emacs.d/server/docker)
+#
+# Then, in the container:
+#   EMACS_SERVER_FILE=docker   (resolved against ~/.emacs.d/server/ or $XDG_CONFIG_HOME/emacs/server/)
+#   or an absolute path if you mount DEST somewhere else.
+
+host="${1:-host.docker.internal}"
+source_file="${2:-$HOME/.emacs.d/server/server}"
+dest_file="${3:-$HOME/.emacs.d/server/docker}"
+
+if [ ! -f "$source_file" ]; then
+  echo "emacs server file not found: $source_file" >&2
+  echo "start Emacs with (setq server-use-tcp t) (server-start) first" >&2
+  exit 1
+fi
+
+resolve_to_ip() {
+  local h="$1"
+
+  if [[ "$h" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    echo "$h"
+    return
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "'$h' is not an IP address and docker is unavailable to resolve it; pass a literal IP" >&2
+    exit 1
+  fi
+
+  local resolved
+  resolved="$(docker run --rm alpine getent hosts "$h" 2>/dev/null | awk '{print $1}')"
+  if [ -z "$resolved" ]; then
+    echo "failed to resolve '$h' to an IP address (from inside a container)" >&2
+    exit 1
+  fi
+  echo "$resolved"
+}
+
+ip="$(resolve_to_ip "$host")"
+port="$(head -n1 "$source_file" | sed 's/.*://')"
+auth="$(sed -n '2p' "$source_file")"
+
+printf '%s:%s\n%s\n' "$ip" "$port" "$auth" > "$dest_file"
+chmod 600 "$dest_file"
+
+echo "wrote $dest_file ($host -> $ip); mount this into the container and set EMACS_SERVER_FILE"

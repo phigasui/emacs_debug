@@ -4,15 +4,39 @@ module EmacsDebug
   HIGHLIGHT_COLOR = "#ffff00"
 
   class << self
-    attr_writer :app_root
+    attr_writer :app_root, :container_root, :host_root
 
     def app_root
       @app_root || (defined?(Rails) ? "#{Rails.root}/app/" : nil)
     end
 
+    # Root of the checkout as seen from this process, e.g. "/app/" inside a
+    # container. Paired with host_root to translate file paths so Emacs,
+    # running outside the container, opens the matching file on its own
+    # filesystem instead of a path that only exists in the container.
+    def container_root
+      @container_root || (defined?(Rails) ? "#{Rails.root}/" : nil)
+    end
+
+    # Root of the same checkout as seen by the Emacs process, e.g.
+    # "/Users/me/myapp/". Typically set via EMACS_DEBUG_HOST_ROOT.
+    def host_root
+      @host_root || ENV["EMACS_DEBUG_HOST_ROOT"]
+    end
+
+    def available?
+      return @available if defined?(@available)
+
+      @available = ENV["PATH"].to_s.split(File::PATH_SEPARATOR).any? do |dir|
+        File.executable?(File.join(dir, "emacsclient"))
+      end
+    end
+
     def debug(obj)
+      return unless available?
+
       location = caller_locations(1, 1).first
-      file = location.absolute_path || location.path
+      file = resolve_path(location.absolute_path || location.path)
       line = location.lineno
       text = obj.is_a?(String) ? obj : obj.pretty_inspect
 
@@ -26,12 +50,14 @@ module EmacsDebug
     end
 
     def open_error(exception)
+      return unless available?
+
       app_location = exception.backtrace_locations&.find do |loc|
         app_root && loc.absolute_path&.start_with?(app_root)
       end
       return unless app_location
 
-      file = app_location.absolute_path
+      file = resolve_path(app_location.absolute_path)
       line = app_location.lineno
 
       eval_lisp(<<~LISP)
@@ -42,6 +68,12 @@ module EmacsDebug
     end
 
     private
+
+    def resolve_path(file)
+      return file unless host_root && container_root && file.start_with?(container_root)
+
+      File.join(host_root, file.delete_prefix(container_root))
+    end
 
     def display_in_buffer(name, file, line, text)
       escaped = elisp_escape(text)
