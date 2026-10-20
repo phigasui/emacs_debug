@@ -53,6 +53,33 @@ end
 
 `container_root` と `host_root` は、Ruby と Emacs が別々の環境で動いている場合（典型的には Ruby が Docker 内、Emacs がホスト上）にのみ設定すればよい。
 
+### Emacs 側でのカスタマイズ (`init.el`)
+
+`emacs_debug` は Emacs 側の設定が一切なくてもそのまま動作するが、ダークテーマ向けにハイライト色を変えたい場合や、ファイルの開き方・バッファの表示方法を変更したい場合は、`init.el` で以下の変数を設定できる:
+
+| Emacs 変数 | デフォルト値 | 用途 |
+| --- | --- | --- |
+| `emacs-debug-highlight-face` | `'(:background "#ffff00")` | ハイライト行のオーバーレイに適用する face シンボルまたは属性リスト（新しいハイライトを作成する際、バッファ内の前回の `emacs-debug` オーバーレイは自動的に消去される） |
+| `emacs-debug-open-file-function` | `nil`（`find-file` + オーバーレイ） | `(funcall emacs-debug-open-file-function file line)` として呼び出されるカスタム関数 |
+| `emacs-debug-buffer-mode` | `#'special-mode` | `*Debug*` / `*Error*` バッファで有効化するメジャーモード関数 |
+| `emacs-debug-display-buffer-function` | `nil`（`get-buffer-create` + `display-buffer`） | `(funcall emacs-debug-display-buffer-function buf-name file line text)` として呼び出されるカスタム表示関数 |
+
+`init.el` での設定例:
+
+```elisp
+;; テーマ標準の `highlight' フェイスを使う（またはダークテーマ向けの属性リストを指定）
+(setq emacs-debug-highlight-face 'highlight)
+
+;; ファイルの開き方をカスタマイズする例（別ウィンドウで開いて pulse.el で一時ハイライト）
+(setq emacs-debug-open-file-function
+      (lambda (file line)
+        (find-file-other-window file)
+        (goto-char (point-min))
+        (forward-line (1- line))
+        (recenter)
+        (pulse-momentary-highlight-one-line (point))))
+```
+
 ## Rails 連携
 
 Rails の例外ページは通常の `raise` / `rescue` の経路を通らないため、代わりに `ActionDispatch::DebugExceptions` にフックする。`config/initializers/emacs_debug.rb` を追加する:
