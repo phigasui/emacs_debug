@@ -1,5 +1,7 @@
 # emacs_debug
 
+*English · [日本語](README.ja.md)*
+
 Debug Ruby applications with Emacs integration. When something interesting
 happens in your Ruby process, `emacs_debug` opens the relevant source file in
 a running Emacs, highlights the triggering line, and shows debug output or
