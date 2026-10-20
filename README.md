@@ -66,6 +66,33 @@ local socket or a TCP server file exists), so it's safe to call `debug` /
 `container_root` / `host_root` only matter when Ruby runs somewhere other
 than where Emacs runs (typically: Ruby in Docker, Emacs on the host).
 
+### Customizing in Emacs (`init.el`)
+
+`emacs_debug` works out of the box with zero Emacs-side configuration. If you want to customize how files are opened, how lines are highlighted (e.g. for dark themes), or how the output buffers behave, you can set the following variables in your `init.el`:
+
+| Emacs variable | Default | Purpose |
+| --- | --- | --- |
+| `emacs-debug-highlight-face` | `'(:background "#ffff00")` | Face symbol or plist applied to the highlighted line overlay (previous `emacs-debug` overlays in the buffer are automatically cleared before adding a new one) |
+| `emacs-debug-open-file-function` | `nil` (uses `find-file` + overlay) | Function called as `(funcall emacs-debug-open-file-function file line)` to open and highlight the target location |
+| `emacs-debug-buffer-mode` | `#'special-mode` | Major mode function called in the `*Debug*` / `*Error*` buffer |
+| `emacs-debug-display-buffer-function` | `nil` (uses `get-buffer-create` + `display-buffer`) | Function called as `(funcall emacs-debug-display-buffer-function buf-name file line text)` to render debug/error output |
+
+Example `init.el` configuration:
+
+```elisp
+;; Use your theme's built-in `highlight' face (or a custom dark-friendly plist)
+(setq emacs-debug-highlight-face 'highlight)
+
+;; Or customize how the source file is opened (e.g. other window + pulse.el)
+(setq emacs-debug-open-file-function
+      (lambda (file line)
+        (find-file-other-window file)
+        (goto-char (point-min))
+        (forward-line (1- line))
+        (recenter)
+        (pulse-momentary-highlight-one-line (point))))
+```
+
 ## Rails integration
 
 Rails' exception page skips your usual `raise` / `rescue` code path, so hook

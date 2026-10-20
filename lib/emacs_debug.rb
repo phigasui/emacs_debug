@@ -77,32 +77,45 @@ module EmacsDebug
     end
 
     def display_in_buffer(name, file, line, text)
-      escaped = elisp_escape(text)
+      escaped_name = elisp_escape(name)
+      escaped_file = elisp_escape(file)
+      escaped_text = elisp_escape(text)
       <<~LISP.chomp
-        (let ((buf (get-buffer-create "#{name}")))
-          (with-current-buffer buf
-            (read-only-mode -1)
-            (erase-buffer)
-            (insert "=== [Triggered at #{file}:#{line}] ===\\n\\n")
-            (insert "#{escaped}")
-            (special-mode))
-          (display-buffer buf))
+        (if (and (boundp 'emacs-debug-display-buffer-function) emacs-debug-display-buffer-function)
+            (funcall emacs-debug-display-buffer-function "#{escaped_name}" "#{escaped_file}" #{line} "#{escaped_text}")
+          (let ((buf (get-buffer-create "#{escaped_name}")))
+            (with-current-buffer buf
+              (read-only-mode -1)
+              (erase-buffer)
+              (insert "=== [Triggered at #{escaped_file}:#{line}] ===\\n\\n")
+              (insert "#{escaped_text}")
+              (funcall (if (and (boundp 'emacs-debug-buffer-mode) emacs-debug-buffer-mode)
+                           emacs-debug-buffer-mode
+                         #'special-mode)))
+            (display-buffer buf)))
       LISP
     end
 
     def elisp_escape(text)
-      text.gsub('\\') { '\\\\' }.gsub('"') { '\\"' }.gsub("\n") { '\\n' }
+      text.to_s.gsub('\\') { '\\\\' }.gsub('"') { '\\"' }.gsub("\n") { '\\n' }
     end
 
     def open_and_highlight(file, line)
+      escaped_file = elisp_escape(file)
       <<~LISP.chomp
-        (find-file "#{file}")
-        (goto-char (point-min))
-        (forward-line (1- #{line}))
-        (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
-          (overlay-put ov 'face '(:background "#{HIGHLIGHT_COLOR}"))
-          (overlay-put ov 'evaporate t))
-        (recenter)
+        (if (and (boundp 'emacs-debug-open-file-function) emacs-debug-open-file-function)
+            (funcall emacs-debug-open-file-function "#{escaped_file}" #{line})
+          (find-file "#{escaped_file}")
+          (goto-char (point-min))
+          (forward-line (1- #{line}))
+          (remove-overlays (point-min) (point-max) 'emacs-debug t)
+          (let ((ov (make-overlay (line-beginning-position) (line-end-position))))
+            (overlay-put ov 'face (if (and (boundp 'emacs-debug-highlight-face) emacs-debug-highlight-face)
+                                      emacs-debug-highlight-face
+                                    '(:background "#{HIGHLIGHT_COLOR}")))
+            (overlay-put ov 'emacs-debug t)
+            (overlay-put ov 'evaporate t))
+          (recenter))
       LISP
     end
 
