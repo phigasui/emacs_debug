@@ -1,3 +1,4 @@
+require "pp"
 require_relative "emacs_debug/version"
 require_relative "emacs_debug/socket_client"
 require_relative "emacs_debug/tcp_client"

@@ -51,6 +51,38 @@ class EmacsDebugTest < Minitest::Test
     assert_includes lisp, "hello \\\"world\\\"\\nline 2"
   end
 
+  def test_debug_formats_non_string_objects_with_pretty_inspect
+    obj = { key: "value", numbers: [1, 2, 3] }
+    with_mocked_emacs do
+      thread = EmacsDebug.debug(obj)
+      thread.join
+    end
+
+    assert_equal 1, @captured_lisp.size
+    lisp = @captured_lisp.first
+
+    assert_includes lisp, "value"
+    assert_includes lisp, "[1, 2, 3]"
+    assert_includes lisp, EmacsDebug.send(:elisp_escape, obj.pretty_inspect)
+  end
+
+  def test_debug_in_isolated_process_without_prior_require_pp
+    code = <<~RUBY
+      require "emacs_debug"
+      EmacsDebug.singleton_class.define_method(:available?) { true }
+      captured = nil
+      EmacsDebug.singleton_class.send(:define_method, :eval_lisp) { |lisp| captured = lisp }
+      t = EmacsDebug.debug({ key: "val" })
+      t.join
+      puts "OK" if captured && captured.include?("val")
+    RUBY
+
+    lib_path = File.expand_path("../lib", __dir__)
+    out, err, status = Open3.capture3("ruby", "-I#{lib_path}", "-e", code)
+    assert status.success?, "Subprocess failed: #{err}"
+    assert_equal "OK\n", out
+  end
+
   def test_open_error_translates_container_path_and_escapes_file
     EmacsDebug.app_root = "/app/"
     EmacsDebug.container_root = "/app/"
