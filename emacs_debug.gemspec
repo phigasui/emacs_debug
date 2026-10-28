@@ -6,8 +6,9 @@ Gem::Specification.new do |spec|
   spec.authors = ["phigasui"]
   spec.summary = "Debug Ruby applications with Emacs integration"
   spec.description = "Opens source files in Emacs at the call site with highlighted lines and displays debug output or error messages in dedicated buffers, talking to Emacs's server directly (no emacsclient binary required)."
+  spec.license = "MIT"
   spec.required_ruby_version = ">= 3.1"
-  spec.files = Dir["lib/**/*.rb"]
+  spec.files = Dir["lib/**/*.rb"] + ["LICENSE"]
   spec.require_paths = ["lib"]
 
   spec.add_development_dependency "minitest", "~> 5.0"
