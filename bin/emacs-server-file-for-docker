@@ -12,8 +12,18 @@ set -euo pipefail
 #
 # Prerequisite on the host, before starting Emacs:
 #   (setq server-use-tcp t)
-#   (setq server-host "0.0.0.0")   ; or a more restrictive bind address
 #   (server-start)
+# With Docker Desktop, leave server-host unset (127.0.0.1 is reachable via
+# host.docker.internal). On Linux, bind to the Docker bridge address, e.g.
+#   (setq server-host "172.17.0.1")
+# and pass that address as HOST (host.docker.internal doesn't resolve on
+# Linux by default):
+#   bin/emacs-server-file-for-docker 172.17.0.1
+# Avoid "0.0.0.0": it exposes Emacs's eval server on every interface.
+#
+# The written file contains the server's auth key: anyone who can read it
+# and reach the port can run code on this machine. Mount it only into
+# containers you trust.
 #
 # Usage: bin/emacs-server-file-for-docker [HOST] [SOURCE] [DEST]
 #   HOST   address (or hostname) the container uses to reach this machine (default: host.docker.internal)
@@ -60,7 +70,10 @@ ip="$(resolve_to_ip "$host")"
 port="$(head -n1 "$source_file" | sed 's/.*://')"
 auth="$(sed -n '2p' "$source_file")"
 
-printf '%s:%s\n%s\n' "$ip" "$port" "$auth" > "$dest_file"
+# Remove any existing copy first: umask only applies to newly created files,
+# so overwriting a file left at 644 would briefly expose the new auth key.
+rm -f "$dest_file"
+(umask 077 && printf '%s:%s\n%s\n' "$ip" "$port" "$auth" > "$dest_file")
 chmod 600 "$dest_file"
 
 echo "wrote $dest_file ($host -> $ip); mount this into the container and set EMACS_SERVER_FILE"

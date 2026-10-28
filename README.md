@@ -120,9 +120,19 @@ Unix-domain socket won't reach across the container boundary. Point
 
    ```elisp
    (setq server-use-tcp t)
-   (setq server-host "0.0.0.0") ; or a more restrictive bind address
    (server-start)
    ```
+
+   With Docker Desktop (macOS/Windows), leave `server-host` unset: Emacs
+   listens on `127.0.0.1` only, and containers still reach it through
+   `host.docker.internal`. On Linux, bind to the Docker bridge address
+   instead (e.g. `(setq server-host "172.17.0.1")`). Start Docker before
+   Emacs so the `docker0` interface exists, and make sure a host firewall
+   (e.g. `ufw`) lets containers reach the port.
+
+   Avoid `(setq server-host "0.0.0.0")`: it exposes Emacs's eval server on
+   every network interface, including shared Wi-Fi. See
+   [Security notes](#security-notes).
 
 2. Rewrite the server file so the container can reach the host via
    `host.docker.internal`:
@@ -134,6 +144,13 @@ Unix-domain socket won't reach across the container boundary. Point
    This writes `~/.emacs.d/server/docker` alongside the real server file
    (pass `HOST`, `SOURCE`, `DEST` as arguments to override the defaults —
    see the script header for details).
+
+   On Linux, `host.docker.internal` doesn't resolve by default, so pass the
+   bridge address Emacs is bound to:
+
+   ```sh
+   bin/emacs-server-file-for-docker 172.17.0.1
+   ```
 
 3. Mount that file into the container and point `EMACS_SERVER_FILE` at it:
 
@@ -152,6 +169,22 @@ Unix-domain socket won't reach across the container boundary. Point
 No `emacsclient` binary is needed in the container image — `emacs_debug`
 speaks the TCP server protocol directly.
 
+## Security notes
+
+Emacs's server evaluates arbitrary Lisp, so anything that can talk to it can
+run code as you on the host.
+
+- **The server file is a credential.** Whoever can read it (and reach the
+  port) can execute code on your machine. Only mount it into containers you
+  trust, keep it `chmod 600` (`bin/emacs-server-file-for-docker` does this),
+  and don't commit it or bake it into an image.
+- **Bind the TCP server narrowly.** Prefer `127.0.0.1` (Docker Desktop) or
+  the Docker bridge address (Linux) over `0.0.0.0`.
+- **TCP traffic is unencrypted.** The auth key and everything sent with
+  `debug`/`open_error` (inspected objects, exception messages) travel in
+  plain text. Keep the connection on the local machine or the Docker bridge,
+  not across a network.
+
 ## Verifying the Docker setup
 
 `docker/verify.rb` and the accompanying `Dockerfile` (which doesn't
@@ -167,3 +200,7 @@ docker run --rm -e EMACS_SERVER_FILE=/server/docker \
   -v ~/.emacs.d/server/docker:/server/docker:ro \
   emacs_debug_verify
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).

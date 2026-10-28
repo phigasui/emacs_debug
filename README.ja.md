@@ -102,9 +102,12 @@ Rails アプリが Docker 内で動き、Emacs がホストマシン上で動い
 
    ```elisp
    (setq server-use-tcp t)
-   (setq server-host "0.0.0.0") ; またはより限定したバインドアドレス
    (server-start)
    ```
+
+   Docker Desktop（macOS/Windows）では `server-host` を設定しないままでよい。Emacs は `127.0.0.1` だけで待ち受け、コンテナからは `host.docker.internal` 経由で届く。Linux では Docker のブリッジアドレスにバインドする（例: `(setq server-host "172.17.0.1")`）。`docker0` インターフェースが存在するよう Emacs より先に Docker を起動し、ホストのファイアウォール（`ufw` など）がコンテナからそのポートへの接続を許可しているか確認すること。
+
+   `(setq server-host "0.0.0.0")` は避けること。共有 Wi-Fi を含むすべてのネットワークインターフェースに Emacs の eval サーバを公開してしまう。[セキュリティ上の注意](#セキュリティ上の注意) を参照。
 
 2. コンテナから `host.docker.internal` 経由でホストへ到達できるよう、サーバファイルを書き換える:
 
@@ -113,6 +116,12 @@ Rails アプリが Docker 内で動き、Emacs がホストマシン上で動い
    ```
 
    これで本来のサーバファイルの隣に `~/.emacs.d/server/docker` が生成される（デフォルト値を上書きするには引数に `HOST`、`SOURCE`、`DEST` を渡す。詳細はスクリプト先頭のコメントを参照）。
+
+   Linux ではデフォルトで `host.docker.internal` が解決できないため、Emacs をバインドしたブリッジアドレスを渡す:
+
+   ```sh
+   bin/emacs-server-file-for-docker 172.17.0.1
+   ```
 
 3. 生成したファイルをコンテナにマウントし、`EMACS_SERVER_FILE` で指定する:
 
@@ -128,6 +137,14 @@ Rails アプリが Docker 内で動き、Emacs がホストマシン上で動い
 
 コンテナイメージ内に `emacsclient` バイナリは不要。`emacs_debug` が直接 TCP サーバプロトコルを話す。
 
+## セキュリティ上の注意
+
+Emacs のサーバは任意の Lisp を評価する。つまりサーバに話しかけられるものは、ホスト上であなたの権限でコードを実行できる。
+
+- **サーバファイルは認証情報として扱う。** これを読めて（かつポートに届く）者は、あなたのマシン上でコードを実行できる。信頼できるコンテナにだけマウントし、`chmod 600` を保ち（`bin/emacs-server-file-for-docker` はそうする）、コミットしたりイメージに焼き込んだりしないこと。
+- **TCP サーバのバインド先は絞る。** `0.0.0.0` ではなく `127.0.0.1`（Docker Desktop）や Docker のブリッジアドレス（Linux）を使う。
+- **TCP 通信は暗号化されない。** 認証キーと、`debug`/`open_error` で送る内容（inspect したオブジェクトや例外メッセージ）は平文で流れる。接続はローカルマシン内か Docker ブリッジ内にとどめ、ネットワークをまたがないこと。
+
 ## Docker 構成の動作確認
 
 `docker/verify.rb` と同梱の `Dockerfile`（`emacsclient` は一切インストールしない）で、両方のシナリオを確認できる:
@@ -142,3 +159,7 @@ docker run --rm -e EMACS_SERVER_FILE=/server/docker \
   -v ~/.emacs.d/server/docker:/server/docker:ro \
   emacs_debug_verify
 ```
+
+## ライセンス
+
+MIT。[LICENSE](LICENSE) を参照。
