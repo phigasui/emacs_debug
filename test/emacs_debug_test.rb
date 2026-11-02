@@ -93,7 +93,7 @@ class EmacsDebugTest < Minitest::Test
     fake_err.define_singleton_method(:backtrace_locations) { [fake_loc] }
 
     with_mocked_emacs do
-      EmacsDebug.open_error(fake_err).join
+      EmacsDebug.open_error(fake_err)
     end
 
     assert_equal 1, @captured_lisp.size

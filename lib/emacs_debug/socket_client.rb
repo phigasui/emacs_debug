@@ -35,6 +35,8 @@ module EmacsDebug
         socket = UNIXSocket.new(path)
         socket.write("-eval #{EmacsServerProtocol.quote(lisp)}\n")
         EmacsServerProtocol.read_reply(socket, timeout)
+      rescue SystemCallError => e
+        raise Error, "couldn't reach Emacs socket at #{path}: #{e.message}"
       ensure
         socket&.close
       end

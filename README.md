@@ -55,10 +55,11 @@ end
 local socket or a TCP server file exists), so it's safe to call `debug` /
 `open_error` unconditionally — they're no-ops when Emacs isn't reachable.
 
-Both `debug` and `open_error` do their Emacs I/O on a background thread, so
-they never block your app while waiting for a reply. If the request can't be
-delivered (no server accepts it, or the interaction raises), a one-line
-warning is written to `$stderr` rather than interrupting your program.
+`debug` does its Emacs I/O on a background thread (it returns the Thread), so
+it never blocks your app while waiting for a reply. `open_error` is
+synchronous so an error report isn't lost if the process exits right after.
+If the request can't be delivered (no server accepts it), a one-line warning
+is written to `$stderr` rather than interrupting your program.
 
 ### Configuration
 

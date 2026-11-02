@@ -59,13 +59,14 @@ module EmacsDebug
       file = configuration.resolve_path(app_location.absolute_path)
       line = app_location.lineno
 
-      run_async do
-        eval_lisp(<<~LISP)
-          (progn
-            #{Lisp.open_and_highlight(file, line)}
-            #{Lisp.display_in_buffer('*Error*', file, line, exception.message)})
-        LISP
-      end
+      # Synchronous (as on main): error reports must not be lost if the
+      # process exits right after.
+      eval_lisp(<<~LISP)
+        (progn
+          #{Lisp.open_and_highlight(file, line)}
+          #{Lisp.display_in_buffer('*Error*', file, line, exception.message)})
+      LISP
+      nil
     end
 
     private
