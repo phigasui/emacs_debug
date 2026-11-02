@@ -63,7 +63,7 @@ class EmacsDebugTest < Minitest::Test
 
     assert_includes lisp, "value"
     assert_includes lisp, "[1, 2, 3]"
-    assert_includes lisp, EmacsDebug.send(:elisp_escape, obj.pretty_inspect)
+    assert_includes lisp, EmacsDebug::Lisp.escape(obj.pretty_inspect)
   end
 
   def test_debug_in_isolated_process_without_prior_require_pp
@@ -112,12 +112,12 @@ class EmacsDebugTest < Minitest::Test
       tmp.write("line 1\nline 2\nline 3\nline 4\n")
       tmp.flush
 
-      open_expr = EmacsDebug.send(:open_and_highlight, tmp.path, 3)
-      disp_expr = EmacsDebug.send(:display_in_buffer, "*Debug*", tmp.path, 3, "debug payload")
+      open_expr = EmacsDebug::Lisp.open_and_highlight(tmp.path, 3)
+      disp_expr = EmacsDebug::Lisp.display_in_buffer("*Debug*", tmp.path, 3, "debug payload")
       combined = "(progn #{open_expr} #{disp_expr})"
 
       # 1. Default behavior (zero-config fallback) + overlay cleanup on repeat
-      open_expr_line2 = EmacsDebug.send(:open_and_highlight, tmp.path, 2)
+      open_expr_line2 = EmacsDebug::Lisp.open_and_highlight(tmp.path, 2)
       script_default = <<~ELISP
         (progn
           (defun recenter (&optional arg) nil)
@@ -188,5 +188,35 @@ class EmacsDebugTest < Minitest::Test
       assert status.success?, "Emacs custom funcs eval failed: #{err}"
       assert_includes out, "CUSTOM_FUNCS_OK"
     end
+  end
+end
+
+class ConfigurationTest < Minitest::Test
+  def setup
+    @config = EmacsDebug::Configuration.new
+    @config.container_root = "/app/"
+    @config.host_root = "/Users/me/myapp/"
+  end
+
+  def test_config_accessors_delegate_to_configuration
+    orig = EmacsDebug.host_root
+    EmacsDebug.host_root = "/Users/me/other/"
+    assert_equal "/Users/me/other/", EmacsDebug.configuration.host_root
+  ensure
+    EmacsDebug.host_root = orig
+  end
+
+  def test_resolve_path_translates_container_path_to_host_path
+    assert_equal "/Users/me/myapp/models/user.rb", @config.resolve_path("/app/models/user.rb")
+  end
+
+  def test_resolve_path_is_identity_without_host_root
+    @config.host_root = nil
+    ENV.delete("EMACS_DEBUG_HOST_ROOT")
+    assert_equal "/app/models/user.rb", @config.resolve_path("/app/models/user.rb")
+  end
+
+  def test_resolve_path_is_identity_for_paths_outside_container_root
+    assert_equal "/gems/foo.rb", @config.resolve_path("/gems/foo.rb")
   end
 end

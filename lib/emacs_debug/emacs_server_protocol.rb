@@ -4,7 +4,21 @@ module EmacsDebug
   module EmacsServerProtocol
     class Error < StandardError; end
 
+    # How long a client waits for a reply before giving up. Shared so both
+    # transports time out identically.
+    DEFAULT_TIMEOUT = 10
+
     class << self
+      # Resolves an emacsclient-style name the way both clients need it:
+      # a value containing "/" is treated as a path (expanded); a bare name
+      # is looked up under default_dir; a nil name falls back to "server".
+      # This is the shared rule behind EMACS_SOCKET_NAME / EMACS_SERVER_FILE.
+      def resolve_name(name, default_dir)
+        return File.expand_path(name) if name&.include?("/")
+
+        File.join(default_dir, name || "server")
+      end
+
       # Mirrors Emacs's `server-quote-arg`: & -> &&, - -> &-, "\n" -> &n,
       # " " -> &_, so the request is a single line with no unescaped spaces.
       def quote(str)
@@ -35,7 +49,7 @@ module EmacsDebug
         loop do
           remaining = deadline - Time.now
           raise Error, "Emacs server did not respond within #{timeout}s" if remaining <= 0
-          break unless IO.select([socket], nil, nil, remaining)
+          break unless socket.wait_readable(remaining)
 
           begin
             buffer << socket.readpartial(4096)
