@@ -1,5 +1,5 @@
-require 'socket'
-require_relative 'emacs_server_protocol'
+require "socket"
+require_relative "emacs_server_protocol"
 
 module EmacsDebug
   # Talks to a TCP-mode Emacs server (`server-use-tcp` set to non-nil, e.g.
@@ -17,10 +17,7 @@ module EmacsDebug
       # bare name under the default auth directory, or a path containing
       # "/"), else the default server file name "server".
       def server_file_path
-        name = ENV['EMACS_SERVER_FILE']
-        return File.expand_path(name) if name && name.include?('/')
-
-        File.join(auth_dir, name || 'server')
+        EmacsServerProtocol.resolve_name(ENV["EMACS_SERVER_FILE"], auth_dir)
       end
 
       def available?
@@ -30,7 +27,7 @@ module EmacsDebug
       # Evaluates LISP on the server. Raises Error if there's no server
       # file to read, it doesn't parse, the connection is refused, or it
       # doesn't reply within TIMEOUT seconds.
-      def eval(lisp, timeout: 10)
+      def eval(lisp, timeout: EmacsServerProtocol::DEFAULT_TIMEOUT)
         host, port, auth_key = read_server_file
 
         socket = TCPSocket.new(host, port)
@@ -49,9 +46,10 @@ module EmacsDebug
       # "~/.config/emacs/" (or $XDG_CONFIG_HOME/emacs/), else default to
       # "~/.emacs.d/" as Emacs itself would for a fresh install.
       def auth_dir
-        xdg_config_home = ENV['XDG_CONFIG_HOME']
-        xdg_dir = File.expand_path(File.join(xdg_config_home.to_s.empty? ? '~/.config' : xdg_config_home, 'emacs/server'))
-        dot_emacs_dir = File.expand_path('~/.emacs.d/server')
+        xdg_config_home = ENV["XDG_CONFIG_HOME"]
+        xdg_dir = File.expand_path(File.join(xdg_config_home.to_s.empty? ? "~/.config" : xdg_config_home,
+                                             "emacs/server"))
+        dot_emacs_dir = File.expand_path("~/.emacs.d/server")
 
         [dot_emacs_dir, xdg_dir].find { |dir| Dir.exist?(dir) } || dot_emacs_dir
       end
@@ -66,8 +64,8 @@ module EmacsDebug
         address_line, auth_key = File.read(path).split("\n", 2)
         raise Error, "malformed Emacs server file at #{path}" unless address_line && auth_key
 
-        host, rest = address_line.split(':', 2)
-        port = rest&.split(' ', 2)&.first
+        host, rest = address_line.split(":", 2)
+        port = rest&.split(" ", 2)&.first
         raise Error, "malformed Emacs server file at #{path}" unless host && port
 
         [host, Integer(port), auth_key.chomp]

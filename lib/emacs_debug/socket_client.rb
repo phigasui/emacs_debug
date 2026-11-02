@@ -1,5 +1,5 @@
-require 'socket'
-require_relative 'emacs_server_protocol'
+require "socket"
+require_relative "emacs_server_protocol"
 
 module EmacsDebug
   # Talks directly to a running Emacs server over its Unix-domain socket,
@@ -18,10 +18,7 @@ module EmacsDebug
       # bare name under the default socket directory, or a path containing
       # "/"), else the default socket name "server".
       def socket_path
-        name = ENV['EMACS_SOCKET_NAME']
-        return File.expand_path(name) if name && name.include?('/')
-
-        File.join(socket_dir, name || 'server')
+        EmacsServerProtocol.resolve_name(ENV["EMACS_SOCKET_NAME"], socket_dir)
       end
 
       def available?
@@ -31,7 +28,7 @@ module EmacsDebug
       # Evaluates LISP on the server. Raises Error if there's no server to
       # talk to, or if it doesn't reply within TIMEOUT seconds. The reply
       # is not parsed: callers only care that the eval was submitted.
-      def eval(lisp, timeout: 10)
+      def eval(lisp, timeout: EmacsServerProtocol::DEFAULT_TIMEOUT)
         path = socket_path
         raise Error, "no Emacs socket at #{path}" unless File.socket?(path)
 
@@ -45,10 +42,10 @@ module EmacsDebug
       private
 
       def socket_dir
-        runtime_dir = ENV['XDG_RUNTIME_DIR']
-        return File.join(runtime_dir, 'emacs') unless runtime_dir.to_s.empty?
+        runtime_dir = ENV["XDG_RUNTIME_DIR"]
+        return File.join(runtime_dir, "emacs") unless runtime_dir.to_s.empty?
 
-        File.join(ENV['TMPDIR'] || '/tmp', "emacs#{Process.uid}")
+        File.join(ENV["TMPDIR"] || "/tmp", "emacs#{Process.uid}")
       end
     end
   end
