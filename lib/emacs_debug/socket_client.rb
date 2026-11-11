@@ -29,14 +29,14 @@ module EmacsDebug
       end
 
       # Evaluates LISP on the server. Raises Error if there's no server to
-      # talk to, or if it doesn't reply within TIMEOUT seconds. The reply
-      # is not parsed: callers only care that the eval was submitted.
+      # talk to, if it doesn't reply within TIMEOUT seconds, or if the
+      # server returns an `-error` reply.
       def eval(lisp, timeout: 10)
         path = socket_path
         raise Error, "no Emacs socket at #{path}" unless File.socket?(path)
 
         socket = UNIXSocket.new(path)
-        socket.write("-eval #{EmacsServerProtocol.quote(lisp)}\n")
+        socket.write("-eval #{EmacsServerProtocol.quote(lisp)} \n")
         EmacsServerProtocol.read_reply(socket, timeout)
       ensure
         socket&.close
