@@ -28,13 +28,14 @@ module EmacsDebug
       end
 
       # Evaluates LISP on the server. Raises Error if there's no server
-      # file to read, it doesn't parse, the connection is refused, or it
-      # doesn't reply within TIMEOUT seconds.
+      # file to read, it doesn't parse, the connection is refused, it
+      # doesn't reply within TIMEOUT seconds, or the server returns an
+      # `-error` reply.
       def eval(lisp, timeout: 10)
         host, port, auth_key = read_server_file
 
         socket = TCPSocket.new(host, port)
-        socket.write("-auth #{auth_key} -eval #{EmacsServerProtocol.quote(lisp)}\n")
+        socket.write("-auth #{auth_key} -eval #{EmacsServerProtocol.quote(lisp)} \n")
         EmacsServerProtocol.read_reply(socket, timeout)
       rescue SystemCallError => e
         raise Error, "couldn't reach Emacs TCP server at #{host}:#{port}: #{e.message}"
